@@ -2,6 +2,8 @@
 //!
 //! Basic usage:
 //! ```
+//! use madhouse_steve_tmi::TMI;
+//!
 //! let oauth_token = String::from("oauth:some_token_here");
 //! let nick = String::from("MadSteveBot");
 //! let rooms = String::from(vec!["MadhouseSteve"]);
@@ -13,6 +15,7 @@
 //!         break;
 //!     }
 //!
+//!     let msg = msg.unwrap();
 //!     // Do something with the message here
 //! }
 //!
