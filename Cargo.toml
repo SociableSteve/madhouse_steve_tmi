@@ -3,6 +3,10 @@ name = "madhouse_steve_tmi"
 version = "0.1.0"
 authors = ["Madhouse Steve <steve@madhouseminers.com>"]
 edition = "2018"
+license = "MIT"
+description = "A Twitch Messaging Interface client"
+repository = "https://github.com/MadhouseSteve/madhouse_steve_tmi"
+homepage = "https://github.com/MadhouseSteve/madhouse_steve_tmi"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
