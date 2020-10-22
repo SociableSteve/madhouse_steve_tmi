@@ -1,17 +1,17 @@
 //! Connects to and allows communication with the Twitch Messaging Interface
 //!
 //! Basic usage:
-//! ```
-//! use madhouse_steve_tmi::TMI;
+//! ```no_run
+//! use madhouse_steve_tmi::Tmi;
 //!
 //! let oauth_token = String::from("oauth:some_token_here");
 //! let nick = String::from("MadSteveBot");
-//! let rooms = String::from(vec!["MadhouseSteve"]);
-//! let tmi = Tmi::new(oauth_token, nick, rooms);
+//! let rooms = vec![String::from("MadhouseSteve")];
+//! let mut tmi = Tmi::new(oauth_token, nick, rooms);
 //! let (join_handle, receiver) = tmi.start();
 //! loop {
 //!     let msg = receiver.recv();
-//!     if msg.is_err {
+//!     if msg.is_err() {
 //!         break;
 //!     }
 //!
@@ -19,7 +19,7 @@
 //!     // Do something with the message here
 //! }
 //!
-//! t.join().unwrap();
+//! join_handle.join().unwrap();
 //! ```
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver};
