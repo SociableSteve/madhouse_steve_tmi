@@ -1,6 +1,6 @@
 [package]
 name = "madhouse_steve_tmi"
-version = "0.1.2"
+version = "0.2.0"
 authors = ["Madhouse Steve <steve@madhouseminers.com>"]
 edition = "2018"
 license = "MIT"
