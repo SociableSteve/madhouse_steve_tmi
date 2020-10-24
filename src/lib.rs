@@ -22,22 +22,20 @@
 //! join_handle.join().unwrap();
 //! ```
 use std::collections::HashMap;
+use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::net::TcpStream;
 use std::sync::mpsc::{channel, Receiver};
-use std::sync::{Arc, Mutex};
 use std::thread::{spawn, JoinHandle};
-use tungstenite::client::AutoStream;
-use tungstenite::http::{HeaderValue, Request};
-use tungstenite::{Message, WebSocket};
 
 /// The structure to handle the Twitch Messaging Interface
 ///
 /// Examples are available in the top level Crate documentation
 pub struct Tmi {
-    ws: Arc<Mutex<WebSocket<AutoStream>>>,
-
     oauth: String,
     nick: String,
     rooms: Vec<String>,
+    sock: TcpStream,
+    writer: BufWriter<TcpStream>,
 }
 
 /// The parsed content of a TMI message
@@ -62,23 +60,15 @@ pub struct DecodedMessage {
 impl Tmi {
     /// Creates a new Twitch Messaging Interface structure
     pub fn new(oauth: String, nick: String, rooms: Vec<String>) -> Tmi {
-        let mut request = Request::get("wss://irc-ws.chat.twitch.tv")
-            .body(())
-            .unwrap();
-
-        request.headers_mut().insert(
-            "Sec-Websocket-Protocol",
-            HeaderValue::from_str("tmi".into()).unwrap(),
-        );
-        let (ws, _response) =
-            tungstenite::client::connect(request).expect("Unable to connect to TMI");
-        let ws = Arc::new(Mutex::new(ws));
+        let sock = TcpStream::connect("irc.chat.twitch.tv:6667").expect("Cannot connect");
+        let writer = BufWriter::new(sock.try_clone().unwrap());
 
         let mut tmi = Tmi {
             oauth,
             nick,
             rooms,
-            ws,
+            sock,
+            writer,
         };
 
         tmi.authenticate();
@@ -90,10 +80,9 @@ impl Tmi {
     fn authenticate(&mut self) {
         self.send(String::from(
             "CAP REQ :twitch.tv/tags twitch.tv/commands twitch.tv/membership",
-        ))
-        .unwrap();
-        self.send(format!("PASS {}", self.oauth)).unwrap();
-        self.send(format!("NICK {}", self.nick)).unwrap();
+        ));
+        self.send(format!("PASS {}", self.oauth));
+        self.send(format!("NICK {}", self.nick));
     }
 
     fn join_all(&mut self) {
@@ -102,42 +91,45 @@ impl Tmi {
         }
         let iter = self.rooms.clone();
         for channel in iter {
-            self.send(format!("JOIN {}", channel)).unwrap();
+            self.send(format!("JOIN {}", channel));
         }
     }
 
     /// Sends a raw message to the IRC server
-    pub fn send(&mut self, message: String) -> Result<(), tungstenite::Error> {
-        self.ws
-            .lock()
-            .unwrap()
-            .write_message(Message::from(message))
+    pub fn send(&mut self, message: String) {
+        let message = message + "\r\n";
+        self.writer.write(message.as_bytes()).unwrap();
+        self.writer.flush().unwrap();
     }
 
     /// Sends a message in to the specified channel
-    pub fn send_to_channel(
-        &mut self,
-        message: String,
-        channel: String,
-    ) -> Result<(), tungstenite::Error> {
-        self.send(format!("PRIVMSG {} :{}", channel, message))
+    pub fn send_to_channel(&mut self, message: String, channel: String) {
+        self.writer
+            .write(format!("PRIVMSG {} :{}", channel, message).as_bytes())
+            .unwrap();
+        self.writer.flush().unwrap();
     }
 
     /// Starts the polling thread, returning a receiver channel and a join handle
     pub fn start(&mut self) -> (JoinHandle<()>, Receiver<DecodedMessage>) {
         let (tx, rx) = channel();
-        let local_ws = self.ws.clone();
+        let mut local_reader = BufReader::new(self.sock.try_clone().unwrap());
+        let mut local_writer = BufWriter::new(self.sock.try_clone().unwrap());
         let t = spawn(move || loop {
-            // TODO - Make sure this breaks if the read fails
-            let mut l_ws = local_ws.lock().unwrap();
-            let message = l_ws.read_message().unwrap().to_string();
+            let mut message = String::new();
+            let read_result = local_reader.read_line(&mut message);
+            if read_result.is_err() {
+                break;
+            }
             let message = message.trim();
 
             let lines = message.split("\r\n");
             for line in lines {
                 if line.starts_with("PING ") {
-                    l_ws.write_message(Message::from(line.replace("PING ", "PONG ")))
+                    local_writer
+                        .write(line.replace("PING ", "PONG ").as_bytes())
                         .unwrap();
+                    local_writer.flush().unwrap();
                 } else {
                     tx.send(parse_message(line.into())).unwrap();
                 }
